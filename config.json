@@ -1,0 +1,43 @@
+{
+    "name": "Sobradinho by @and1k99",
+    "pawn": {
+        "legacy_plugins": [
+            "../plugins/log-core.dll",
+            "../plugins/crashdetect.dll",
+            "../plugins/streamer.dll",
+            "../plugins/mysql.dll"
+        ],
+        "main_scripts": [
+            "meumundo 1"
+        ],
+        "side_scripts": []
+    },
+    "rcon": {
+        "enable": true,
+        "password": "94009216a",
+        "allow_teleport": false
+    },
+    "network": {
+        "port": 7777,
+        "max_players": 10,
+        "on_foot_sync_rate": 40,
+        "in_car_sync_rate": 40,
+        "weapon_sync_rate": 40,
+        "stream_rate": 1000,
+        "stream_radius": 300.0,
+        "use_lan_mode": false
+    },
+    "game": {
+        "mode": "Freeroam",
+        "map": "San Andreas",
+        "language": "Portuguese",
+        "use_stunt_bonuses": false
+    },
+    "logging": {
+        "log_chat": false,
+        "timestamp_format": "[%H:%M:%S]"
+    },
+    "announce": false,
+    "website": "",
+    "password": ""
+}

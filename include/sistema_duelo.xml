@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<?xml-stylesheet href="file:///C|/ServidorFinal/qawno/xml/pawndoc.xsl" type="text/xsl"?>
+<doc source="C:\ServidorFinal\qawno\include\sistema_duelo.inc">
+	<assembly>
+		<name>sistema_duelo.inc</name>
+	</assembly>
+	<members>
+
+		<!-- enumerations -->
+
+		<!-- constants -->
+		<member name="C:false" value="0">
+			<tagname value="bool"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="DueloCountdown"/>
+			<referrer name="DueloCountdown2"/>
+		</member>
+		<member name="C:true" value="1">
+			<tagname value="bool"/>
+			<referrer name="ProcessarComandosDuelo"/>
+		</member>
+
+		<!-- variables -->
+		<member name="F:__date">
+		</member>
+		<member name="F:__file">
+		</member>
+		<member name="F:__time">
+		</member>
+
+		<!-- functions -->
+		<member name="M:DueloCountdown" syntax="DueloCountdown(playerid, targetid)">
+			<attribute name="public"/>
+			<stacksize value="9"/>
+			<dependency name="GameTextForAll"/>
+			<dependency name="SetTimerEx"/>
+			<dependency name="false"/>
+			<param name="playerid">
+			</param>
+			<param name="targetid">
+			</param>
+		</member>
+		<member name="M:DueloCountdown2" syntax="DueloCountdown2(playerid, targetid)">
+			<attribute name="public"/>
+			<stacksize value="9"/>
+			<dependency name="GameTextForAll"/>
+			<dependency name="SetTimerEx"/>
+			<dependency name="false"/>
+			<param name="playerid">
+			</param>
+			<param name="targetid">
+			</param>
+		</member>
+		<member name="M:DueloCountdown3" syntax="DueloCountdown3(playerid, targetid)">
+			<attribute name="public"/>
+			<stacksize value="6"/>
+			<dependency name="GameTextForAll"/>
+			<dependency name="IsPlayerConnected"/>
+			<dependency name="TogglePlayerControllable"/>
+			<param name="playerid">
+			</param>
+			<param name="targetid">
+			</param>
+		</member>
+		<member name="M:FinalizarDuelo" syntax="FinalizarDuelo(vencedor, perdedor, motivo[])">
+			<attribute name="public"/>
+			<stacksize value="7"/>
+			<dependency name="GetPlayerName"/>
+			<dependency name="IsPlayerConnected"/>
+			<dependency name="SendClientMessageToAll"/>
+			<dependency name="SetPlayerInterior"/>
+			<dependency name="SetPlayerPos"/>
+			<dependency name="SpawnPlayer"/>
+			<dependency name="TogglePlayerControllable"/>
+			<dependency name="format"/>
+			<param name="vencedor">
+			</param>
+			<param name="perdedor">
+			</param>
+			<param name="motivo">
+				<paraminfo> [] </paraminfo>
+			</param>
+		</member>
+		<member name="M:GameTextForAll" syntax="GameTextForAll()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="DueloCountdown"/>
+			<referrer name="DueloCountdown2"/>
+			<referrer name="DueloCountdown3"/>
+		</member>
+		<member name="M:GetPlayerInterior" syntax="GetPlayerInterior()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+		</member>
+		<member name="M:GetPlayerName" syntax="GetPlayerName()">
+			<stacksize value="1"/>
+			<referrer name="ProcessarComandosDuelo"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="FinalizarDuelo"/>
+		</member>
+		<member name="M:GetPlayerPos" syntax="GetPlayerPos()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+		</member>
+		<member name="M:GivePlayerWeapon" syntax="GivePlayerWeapon()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+		</member>
+		<member name="M:IniciarDuelo" syntax="IniciarDuelo(playerid, targetid)">
+			<attribute name="public"/>
+			<stacksize value="9"/>
+			<referrer name="ProcessarComandosDuelo"/>
+			<dependency name="GameTextForAll"/>
+			<dependency name="GetPlayerInterior"/>
+			<dependency name="GetPlayerName"/>
+			<dependency name="GetPlayerPos"/>
+			<dependency name="GivePlayerWeapon"/>
+			<dependency name="ResetPlayerWeapons"/>
+			<dependency name="SendClientMessageToAll"/>
+			<dependency name="SetPlayerArmour"/>
+			<dependency name="SetPlayerFacingAngle"/>
+			<dependency name="SetPlayerHealth"/>
+			<dependency name="SetPlayerInterior"/>
+			<dependency name="SetPlayerPos"/>
+			<dependency name="SetTimerEx"/>
+			<dependency name="TogglePlayerControllable"/>
+			<dependency name="false"/>
+			<dependency name="format"/>
+			<param name="playerid">
+			</param>
+			<param name="targetid">
+			</param>
+		</member>
+		<member name="M:IsPlayerConnected" syntax="IsPlayerConnected()">
+			<stacksize value="1"/>
+			<referrer name="ProcessarComandosDuelo"/>
+			<referrer name="FinalizarDuelo"/>
+			<referrer name="DueloCountdown3"/>
+		</member>
+		<member name="M:ProcessarComandosDuelo" syntax="ProcessarComandosDuelo(playerid, cmd[], params[])">
+			<attribute name="public"/>
+			<stacksize value="136"/>
+			<dependency name="GetPlayerName"/>
+			<dependency name="IniciarDuelo"/>
+			<dependency name="IsPlayerConnected"/>
+			<dependency name="SendClientMessage"/>
+			<dependency name="format"/>
+			<dependency name="sscanf"/>
+			<dependency name="strcmp"/>
+			<dependency name="true"/>
+			<param name="playerid">
+			</param>
+			<param name="cmd">
+				<paraminfo> [] </paraminfo>
+			</param>
+			<param name="params">
+				<paraminfo> [] </paraminfo>
+			</param>
+		</member>
+		<member name="M:ResetPlayerWeapons" syntax="ResetPlayerWeapons()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+		</member>
+		<member name="M:SendClientMessage" syntax="SendClientMessage()">
+			<stacksize value="1"/>
+			<referrer name="ProcessarComandosDuelo"/>
+		</member>
+		<member name="M:SendClientMessageToAll" syntax="SendClientMessageToAll()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="FinalizarDuelo"/>
+		</member>
+		<member name="M:SetPlayerArmour" syntax="SetPlayerArmour()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+		</member>
+		<member name="M:SetPlayerFacingAngle" syntax="SetPlayerFacingAngle()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+		</member>
+		<member name="M:SetPlayerHealth" syntax="SetPlayerHealth()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+		</member>
+		<member name="M:SetPlayerInterior" syntax="SetPlayerInterior()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="FinalizarDuelo"/>
+		</member>
+		<member name="M:SetPlayerPos" syntax="SetPlayerPos()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="FinalizarDuelo"/>
+		</member>
+		<member name="M:SetTimerEx" syntax="SetTimerEx()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="DueloCountdown"/>
+			<referrer name="DueloCountdown2"/>
+		</member>
+		<member name="M:SpawnPlayer" syntax="SpawnPlayer()">
+			<stacksize value="1"/>
+			<referrer name="FinalizarDuelo"/>
+		</member>
+		<member name="M:TogglePlayerControllable" syntax="TogglePlayerControllable()">
+			<stacksize value="1"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="FinalizarDuelo"/>
+			<referrer name="DueloCountdown3"/>
+		</member>
+		<member name="M:format" syntax="format()">
+			<stacksize value="1"/>
+			<referrer name="ProcessarComandosDuelo"/>
+			<referrer name="IniciarDuelo"/>
+			<referrer name="FinalizarDuelo"/>
+		</member>
+		<member name="M:sscanf" syntax="sscanf()">
+			<stacksize value="1"/>
+			<referrer name="ProcessarComandosDuelo"/>
+		</member>
+		<member name="M:strcmp" syntax="strcmp()">
+			<stacksize value="1"/>
+			<referrer name="ProcessarComandosDuelo"/>
+		</member>
+
+	</members>
+</doc>

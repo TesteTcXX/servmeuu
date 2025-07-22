@@ -1,0 +1,733 @@
+/*
+    GAMEMODE DEFINITIVO: SOBRADINHO by @and1k99 (v18.6 - Duelo Modular)
+    - Sistema de Duelo movido para o m?dulo "sistema_duelo.inc".
+    - C?digo 100% completo, sem omiss?es.
+*/
+
+#define SAMP_COMPAT
+
+#include <a_samp>
+#include <sscanf2>
+#include <streamer>
+
+// --- CONFIGURACOES GERAIS ---
+#define DONO_DO_SERVIDOR "1k99"
+#define MAX_PLAYER_VEHICLES 2
+#define COR_AZUL 0x33CCFFFF
+#define COR_VERDE 0x00FF00FF
+#define COR_VERMELHA 0xFF0000FF
+#define COR_AMARELA 0xFFFF00AA
+#define COR_CINZA 0xCCCCCCAA
+
+// --- DIALOGS E SKINS ---
+#define DIALOG_ARMAS 1
+#define DIALOG_LOCAIS 2
+#define DIALOG_SKIN_CATEGORIAS      3
+#define DIALOG_SKIN_GANGUES         4
+#define DIALOG_SKIN_LEI             5
+#define DIALOG_SKIN_CIVIL_M         6
+#define DIALOG_SKIN_CIVIL_F         7
+#define DIALOG_SKIN_ALL_RANGES      8
+#define DIALOG_SKIN_ALL_0_49        9
+#define DIALOG_SKIN_ALL_50_99       10
+#define DIALOG_SKIN_ALL_100_149     11
+#define DIALOG_SKIN_ALL_150_199     12
+#define DIALOG_SKIN_ALL_200_249     13
+#define DIALOG_SKIN_ALL_250_311     14
+#define DIALOG_SKIN_SUB_GANG_LS     15
+#define DIALOG_SKIN_SUB_LEI_COP     16
+#define DIALOG_SKIN_SUB_CIVIL_M_CASUAL 17
+new gGangueLS_Skins[] = {105, 1, 2, 265, 266, 102, 103, 108, 109, 110};
+new gLeiCop_Skins[] = {280, 281, 282, 283, 284, 287, 288, 286};
+new gCivilMCasual_Skins[] = {7, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 163, 164};
+new gCivilFSkins[] = {10, 11, 12, 13, 14, 39, 40, 41, 53, 54, 55, 56, 62, 93};
+
+// --- VARI?VEIS DE CORRIDA ---
+#define MAX_CHECKPOINTS_CORRIDA 7
+new bool:gCorridaAtiva = false;
+new bool:gInscricoesAbertas = false;
+new gTimerCorrida;
+new gTimerProntos;
+new bool:gJogadoresNaCorrida[MAX_PLAYERS];
+new gCheckpointAtual[MAX_PLAYERS];
+new gPosicaoChegada;
+new gCarroCorrida[MAX_PLAYERS];
+new bool:gPilotoPronto[MAX_PLAYERS];
+new Float:gPosLargada[][4] = { {1318.5, 1223.1, 10.8, 180.0}, {1318.5, 1227.1, 10.8, 180.0}, {1318.5, 1231.1, 10.8, 180.0}, {1322.5, 1223.1, 10.8, 180.0}, {1322.5, 1227.1, 10.8, 180.0}, {1322.5, 1231.1, 10.8, 180.0} };
+new Float:gCheckpointsCorrida[MAX_CHECKPOINTS_CORRIDA][3] = { {1319.4, 638.1, 11.2}, {1813.5, 178.6, 8.8}, {2447.7, 725.9, 10.8}, {2301.7, 1404.9, 10.8}, {1818.1, 2038.9, 10.8}, {1118.8, 1894.4, 10.8}, {1166.4, 1223.3, 10.8} };
+
+// --- VARIAVEIS DO JOGADOR ---
+enum pInfo
+{
+	bool:pGodMode,
+	pLastTpTime,
+	pDueloCom,
+	pDueloStatus,
+	pLastFogosTime,
+	pSkin,
+	pPlayerVehicles[MAX_PLAYER_VEHICLES],
+	pVehicleIndex
+}
+new PlayerInfo[MAX_PLAYERS][pInfo];
+new Float:pOldPosX[MAX_PLAYERS];
+new Float:pOldPosY[MAX_PLAYERS];
+new Float:pOldPosZ[MAX_PLAYERS];
+new pOldInterior[MAX_PLAYERS];
+
+// --- M?DULOS INCLU?DOS ---
+#include "sistema_duelo.inc"
+#include "sistema_car.inc"
+
+// --- DECLARACOES (FORWARDS) ---
+forward UnprotectPlayer(playerid);
+forward PutPlayerInVehicle_Fix(playerid, vehicleid);
+forward IniciarAposContagem();
+forward ChecarPilotosProntos();
+forward CorridaCountdown(contagem);
+
+public OnGameModeInit()
+{
+	SetGameModeText("Sobradinho by @and1k99");
+	ShowPlayerMarkers(1);
+	DisableInteriorEnterExits();
+	EnableStuntBonusForAll(0);
+	AddPlayerClass(0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0, 0, 0, 0);
+	print("\n> Gamemode 'Sobradinho by @and1k99' v18.6 (Modular) Carregado.\n");
+	return 1;
+}
+
+public OnPlayerConnect(playerid)
+{
+	SendClientMessage(playerid, COR_AMARELA, ">> Bem-vindo ao Sobradinho by @and1k99! Escolha seu personagem.");
+	PlayerInfo[playerid][pDueloStatus] = 0;
+	PlayerInfo[playerid][pDueloCom] = -1;
+	PlayerInfo[playerid][pLastFogosTime] = 0;
+	gJogadoresNaCorrida[playerid] = false;
+	gPilotoPronto[playerid] = false;
+	gCarroCorrida[playerid] = INVALID_VEHICLE_ID;
+	PlayerInfo[playerid][pVehicleIndex] = 0;
+	for(new i=0; i < MAX_PLAYER_VEHICLES; i++)
+	{
+	    PlayerInfo[playerid][pPlayerVehicles][i] = INVALID_VEHICLE_ID;
+	}
+	return 1;
+}
+
+public OnPlayerDisconnect(playerid, reason)
+{
+	if(PlayerInfo[playerid][pDueloStatus] >= 2)
+	{
+		FinalizarDuelo(PlayerInfo[playerid][pDueloCom], playerid, "desconectou");
+	}
+    if(gJogadoresNaCorrida[playerid] == true)
+    {
+        gJogadoresNaCorrida[playerid] = false;
+        new name[MAX_PLAYER_NAME], str[128];
+        GetPlayerName(playerid, name, sizeof(name));
+        format(str, sizeof(str), "CORRIDA: %s saiu da corrida.", name);
+        SendClientMessageToAll(COR_AMARELA, str);
+        if(IsValidVehicle(gCarroCorrida[playerid]))
+        {
+            DestroyVehicle(gCarroCorrida[playerid]);
+        }
+    }
+	for(new i=0; i < MAX_PLAYER_VEHICLES; i++)
+	{
+	    if(IsValidVehicle(PlayerInfo[playerid][pPlayerVehicles][i]))
+	    {
+	        DestroyVehicle(PlayerInfo[playerid][pPlayerVehicles][i]);
+	    }
+	}
+	return 1;
+}
+
+public OnPlayerRequestClass(playerid, classid)
+{
+	ShowPlayerDialog(playerid, DIALOG_SKIN_CATEGORIAS, DIALOG_STYLE_LIST, "Selecao de Personagem", "Categorias Populares\nTodas as Skins (por ID)", "Abrir", "Cancelar");
+	return 1;
+}
+
+public OnPlayerSpawn(playerid)
+{
+    SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    SetPlayerPos(playerid, 1332.1, -2037.0, 13.0);
+	GivePlayerMoney(playerid, 100000);
+	GivePlayerWeapon(playerid, 24, 200);
+	SendClientMessage(playerid, COR_VERDE, ">> Voce recebeu $100,000 e uma Desert Eagle!");
+	SetPlayerHealth(playerid, 999999.0);
+	SendClientMessage(playerid, COR_AZUL, "INFO: Voce esta com protecao de spawn por 5 segundos.");
+	SetTimerEx("UnprotectPlayer", 5000, 0, "i", playerid);
+	TogglePlayerControllable(playerid, 1);
+	return 1;
+}
+
+public OnPlayerStateChange(playerid, newstate, oldstate)
+{
+    if(newstate == PLAYER_STATE_DRIVER)
+    {
+        if(gJogadoresNaCorrida[playerid] && GetPlayerVehicleID(playerid) == gCarroCorrida[playerid])
+        {
+            if(gPilotoPronto[playerid] == false)
+            {
+                gPilotoPronto[playerid] = true;
+                SendClientMessage(playerid, COR_VERDE, "Voce esta pronto! Aguardando os outros pilotos...");
+            }
+        }
+    }
+    return 1;
+}
+
+public UnprotectPlayer(playerid)
+{
+    if(IsPlayerConnected(playerid))
+    {
+        SetPlayerHealth(playerid, 100.0);
+        SendClientMessage(playerid, COR_VERMELHA, "INFO: Sua protecao de spawn acabou.");
+    }
+    return 1;
+}
+
+public OnPlayerDeath(playerid, killerid, reason)
+{
+	if(PlayerInfo[playerid][pDueloStatus] == 3)
+	{
+		FinalizarDuelo(killerid, playerid, "matou");
+	}
+	if(gJogadoresNaCorrida[playerid] == true)
+    {
+        gJogadoresNaCorrida[playerid] = false;
+        DisablePlayerRaceCheckpoint(playerid);
+        new name[MAX_PLAYER_NAME], str[128];
+        GetPlayerName(playerid, name, sizeof(name));
+        format(str, sizeof(str), "CORRIDA: %s foi eliminado da corrida.", name);
+        SendClientMessageToAll(COR_AMARELA, str);
+        if(IsValidVehicle(gCarroCorrida[playerid]))
+        {
+            DestroyVehicle(gCarroCorrida[playerid]);
+        }
+    }
+	return 1;
+}
+
+public OnPlayerExitVehicle(playerid, vehicleid)
+{
+    if(gJogadoresNaCorrida[playerid] == true && vehicleid == gCarroCorrida[playerid])
+    {
+        gJogadoresNaCorrida[playerid] = false;
+        DisablePlayerRaceCheckpoint(playerid);
+        new name[MAX_PLAYER_NAME], str[128];
+        GetPlayerName(playerid, name, sizeof(name));
+        format(str, sizeof(str), "CORRIDA: %s saiu do carro e foi eliminado.", name);
+        SendClientMessageToAll(COR_AMARELA, str);
+        if(IsValidVehicle(gCarroCorrida[playerid]))
+        {
+            DestroyVehicle(gCarroCorrida[playerid]);
+        }
+    }
+    return 1;
+}
+
+public OnPlayerEnterRaceCheckpoint(playerid)
+{
+    if(gJogadoresNaCorrida[playerid] == true)
+    {
+        gCheckpointAtual[playerid]++;
+        DisablePlayerRaceCheckpoint(playerid);
+        if(gCheckpointAtual[playerid] >= MAX_CHECKPOINTS_CORRIDA)
+        {
+            gPosicaoChegada++;
+            gJogadoresNaCorrida[playerid] = false;
+            new name[MAX_PLAYER_NAME], str[128], premio = 100000 / gPosicaoChegada;
+            GetPlayerName(playerid, name, sizeof(name));
+            format(str, sizeof(str), "CHEGADA: %s terminou a corrida em %d lugar e ganhou $%d!", name, gPosicaoChegada, premio);
+            SendClientMessageToAll(COR_VERDE, str);
+            GivePlayerMoney(playerid, premio);
+        }
+        else
+        {
+            new next = gCheckpointAtual[playerid];
+            if(next == MAX_CHECKPOINTS_CORRIDA - 1)
+            {
+                SetPlayerRaceCheckpoint(playerid, 2, gCheckpointsCorrida[next][0], gCheckpointsCorrida[next][1], gCheckpointsCorrida[next][2], 0.0, 0.0, 0.0, 8.0);
+            }
+            else
+            {
+                SetPlayerRaceCheckpoint(playerid, 1, gCheckpointsCorrida[next][0], gCheckpointsCorrida[next][1], gCheckpointsCorrida[next][2], gCheckpointsCorrida[next+1][0], gCheckpointsCorrida[next+1][1], gCheckpointsCorrida[next+1][2], 8.0);
+            }
+        }
+    }
+    return 1;
+}
+
+public OnDialogResponse(playerid, dialogid, response, listitem, inputtext[])
+{
+    if(!response)
+    {
+        if(dialogid >= DIALOG_SKIN_CATEGORIAS && GetPlayerState(playerid) != PLAYER_STATE_SPAWNED)
+        {
+            ShowPlayerDialog(playerid, DIALOG_SKIN_CATEGORIAS, DIALOG_STYLE_LIST, "Selecao de Personagem", "Categorias Populares\nTodas as Skins (por ID)", "Abrir", "Cancelar");
+        }
+        return 1;
+    }
+    switch(dialogid)
+    {
+        case DIALOG_ARMAS:
+        {
+            ResetPlayerWeapons(playerid);
+            switch(listitem)
+            {
+                case 0: { GivePlayerWeapon(playerid, 24, 200); GivePlayerWeapon(playerid, 25, 300); GivePlayerWeapon(playerid, 31, 500); SendClientMessage(playerid, COR_VERDE, "Voce recebeu o pacote: GANGSTER."); }
+                case 1: { GivePlayerWeapon(playerid, 22, 200); GivePlayerWeapon(playerid, 29, 500); GivePlayerWeapon(playerid, 34, 100); GivePlayerWeapon(playerid, 41, 1); SendClientMessage(playerid, COR_VERDE, "Voce recebeu o pacote: FUZILEIRO."); }
+                case 2: { GivePlayerWeapon(playerid, 32, 1000); GivePlayerWeapon(playerid, 35, 20); GivePlayerWeapon(playerid, 38, 500); GivePlayerWeapon(playerid, 46, 1); SendClientMessage(playerid, COR_VERDE, "Voce recebeu o pacote: ANIQUILADOR."); }
+                case 3:
+                {
+                    for(new i = 1; i < 47; i++)
+                    {
+                        if(i != 44 && i != 45) { GivePlayerWeapon(playerid, i, 9999); }
+                    }
+                    SendClientMessage(playerid, COR_VERDE, "Voce recebeu o pacote: TUDO!");
+                }
+            }
+            return 1;
+        }
+        case DIALOG_LOCAIS:
+        {
+            switch(listitem)
+            {
+                case 0: SetPlayerPos(playerid, 1686.0, -2229.0, 13.5);
+                case 1: SetPlayerPos(playerid, 2495.2, -1685.1, 13.5);
+                case 2: SetPlayerPos(playerid, -1959.0, 242.0, 35.0);
+                case 3: SetPlayerPos(playerid, 2267.8, 2410.5, 10.8);
+                case 4: SetPlayerPos(playerid, 483.5, -1336.7, 16.5);
+            }
+            SendClientMessage(playerid, COR_AZUL, "Teleportado com sucesso!");
+            return 1;
+        }
+        case DIALOG_SKIN_CATEGORIAS:
+        {
+            switch(listitem)
+            {
+                case 0: ShowPlayerDialog(playerid, DIALOG_SKIN_GANGUES, DIALOG_STYLE_LIST, "Categorias Populares", "Gangues de LS\nPoliciais\nCivis Casuais (M)\nCivis (Mulheres)", "Abrir", "Voltar");
+                case 1: ShowPlayerDialog(playerid, DIALOG_SKIN_ALL_RANGES, DIALOG_STYLE_LIST, "Todas as Skins (por ID)", "Skins 0-49\nSkins 50-99\nSkins 100-149\nSkins 150-199\nSkins 200-249\nSkins 250-311", "Abrir", "Voltar");
+            }
+            return 1;
+        }
+        case DIALOG_SKIN_GANGUES:
+        {
+            switch(listitem)
+            {
+                case 0: ShowPlayerDialog(playerid, DIALOG_SKIN_SUB_GANG_LS, DIALOG_STYLE_LIST, "Personagens: Gangues de LS", "Sweet\nRyder\nBig Smoke\nGrove 1\nGrove 2\nBallas 1\nBallas 2\nVagos 1\nGrove (Outro)", "Escolher", "Voltar");
+                case 1: ShowPlayerDialog(playerid, DIALOG_SKIN_SUB_LEI_COP, DIALOG_STYLE_LIST, "Personagens: Policiais", "Policial LS\nPolicial SF\nPolicial LV\nPolicial de Moto\nPolicial de Estrada\nSWAT\nFBI\nExercito", "Escolher", "Voltar");
+                case 2: ShowPlayerDialog(playerid, DIALOG_SKIN_SUB_CIVIL_M_CASUAL, DIALOG_STYLE_LIST, "Personagens: Civis Casuais (M)", "Civil 1\nCivil 2\nRapper\nDJ\nPraia 1\nPraia 2\nFazendeiro", "Escolher", "Voltar");
+                case 3: ShowPlayerDialog(playerid, DIALOG_SKIN_CIVIL_F, DIALOG_STYLE_LIST, "Personagens: Civis (Mulheres)", "Garota 1\nGarota 2\nGarota 3\nGarota 4\nGarota 5\nGarota 6\nGarota 7", "Escolher", "Voltar");
+            }
+            return 1;
+        }
+        case DIALOG_SKIN_ALL_RANGES:
+        {
+            new skinlist[1200], tmp[20];
+            new start_id, end_id, dialogid_range;
+            switch(listitem)
+            {
+                case 0: { start_id = 0;   end_id = 49;  dialogid_range = DIALOG_SKIN_ALL_0_49; }
+                case 1: { start_id = 50;  end_id = 99;  dialogid_range = DIALOG_SKIN_ALL_50_99; }
+                case 2: { start_id = 100; end_id = 149; dialogid_range = DIALOG_SKIN_ALL_100_149; }
+                case 3: { start_id = 150; end_id = 199; dialogid_range = DIALOG_SKIN_ALL_150_199; }
+                case 4: { start_id = 200; end_id = 249; dialogid_range = DIALOG_SKIN_ALL_200_249; }
+                case 5: { start_id = 250; end_id = 311; dialogid_range = DIALOG_SKIN_ALL_250_311; }
+            }
+            for(new i = start_id; i <= end_id; i++)
+            {
+                format(tmp, sizeof(tmp), "Skin ID: %d\n", i);
+                strcat(skinlist, tmp);
+            }
+            ShowPlayerDialog(playerid, dialogid_range, DIALOG_STYLE_LIST, "Escolha uma Skin", skinlist, "Escolher", "Voltar");
+            return 1;
+        }
+        case DIALOG_SKIN_SUB_GANG_LS:
+{
+    PlayerInfo[playerid][pSkin] = gGangueLS_Skins[listitem];
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_SUB_LEI_COP:
+{
+    PlayerInfo[playerid][pSkin] = gLeiCop_Skins[listitem];
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_SUB_CIVIL_M_CASUAL:
+{
+    PlayerInfo[playerid][pSkin] = gCivilMCasual_Skins[listitem];
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_CIVIL_F:
+{
+    PlayerInfo[playerid][pSkin] = gCivilFSkins[listitem];
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_ALL_0_49:
+{
+    PlayerInfo[playerid][pSkin] = listitem;
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_ALL_50_99:
+{
+    PlayerInfo[playerid][pSkin] = 50 + listitem;
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_ALL_100_149:
+{
+    PlayerInfo[playerid][pSkin] = 100 + listitem;
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_ALL_150_199:
+{
+    PlayerInfo[playerid][pSkin] = 150 + listitem;
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_ALL_200_249:
+{
+    PlayerInfo[playerid][pSkin] = 200 + listitem;
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+case DIALOG_SKIN_ALL_250_311:
+{
+    PlayerInfo[playerid][pSkin] = 250 + listitem;
+    if(GetPlayerState(playerid) != PLAYER_STATE_SPAWNED) SpawnPlayer(playerid);
+    else SetPlayerSkin(playerid, PlayerInfo[playerid][pSkin]);
+    return 1;
+}
+    }
+    return 1;
+}
+
+public OnPlayerClickPlayer(playerid, clickedplayerid, source)
+{
+    return 1;
+}
+
+public OnPlayerCommandText(playerid, cmdtext[])
+{
+	new cmd[128], params[128], sendername[MAX_PLAYER_NAME];
+	GetPlayerName(playerid, sendername, sizeof(sendername));
+	if(sscanf(cmdtext, "s[128]S()[128]", cmd, params)) return SendClientMessage(playerid, COR_CINZA, "ERRO: Comando desconhecido. Digite /comandos.");
+
+	if(ProcessarComandosDuelo(playerid, cmd, params)) return 1;
+	if(ProcessarComandoCar(playerid, cmd, params)) return 1;
+
+	if(strcmp(cmd, "/comandos", true) == 0)
+	{
+		SendClientMessage(playerid, -1, "--- COMANDOS DE JOGADOR ---");
+		SendClientMessage(playerid, COR_AZUL, "/skin, /locais, /tp, /veh, /reparar, /pular, /cor, /jetpack, /flip, /nos, /armas, /mp, /vida, /colete");
+		SendClientMessage(playerid, COR_AZUL, "/duelo, /aceitar, /recusar, /cancelar, /entrarcorrida, /saircorrida, /fogos, /car");
+		if(strcmp(sendername, DONO_DO_SERVIDOR, true) == 0)
+		{
+			SendClientMessage(playerid, COR_VERMELHA, "--- COMANDOS DE ADMINISTRACAO ---");
+			SendClientMessage(playerid, COR_VERMELHA, "!tp, /iniciarcorrida, /get, /goto, /kick, /ban, /allweapons, /anuncio, /god, /clima");
+		}
+		return 1;
+	}
+	if(strcmp(cmd, "/skin", true) == 0)
+	{
+		ShowPlayerDialog(playerid, DIALOG_SKIN_CATEGORIAS, DIALOG_STYLE_LIST, "Selecao de Personagem", "Categorias Populares\nTodas as Skins (por ID)", "Abrir", "Cancelar");
+		return 1;
+	}
+    if(strcmp(cmd, "/fogos", true) == 0)
+	{
+	    if(GetTickCount() - PlayerInfo[playerid][pLastFogosTime] < 5000)
+	    {
+	        SendClientMessage(playerid, COR_VERMELHA, "ERRO: Aguarde 5 segundos para lancar mais fogos.");
+	        return 1;
+	    }
+		new Float:x, Float:y, Float:z;
+		GetPlayerPos(playerid, x, y, z);
+		CreateExplosion(x, y, z + 20.0, 12, 10.0);
+		SendClientMessage(playerid, COR_VERDE, "Voce lancou um fogo de artificio!");
+		PlayerInfo[playerid][pLastFogosTime] = GetTickCount();
+		return 1;
+	}
+    if(strcmp(cmd, "/entrarcorrida", true) == 0)
+    {
+        if(!gInscricoesAbertas) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: As inscricoes para a corrida nao estao abertas.");
+        if(gJogadoresNaCorrida[playerid] == true) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Voce ja esta inscrito na corrida.");
+        gJogadoresNaCorrida[playerid] = true;
+        new str[128];
+        format(str, sizeof(str), "CORRIDA: %s entrou na corrida!", sendername);
+        SendClientMessageToAll(COR_AZUL, str);
+        return 1;
+    }
+    if(strcmp(cmd, "/saircorrida", true) == 0)
+    {
+        if(gJogadoresNaCorrida[playerid] == false) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Voce nao esta em uma corrida.");
+        gJogadoresNaCorrida[playerid] = false;
+        DisablePlayerRaceCheckpoint(playerid);
+        SpawnPlayer(playerid);
+        SendClientMessage(playerid, COR_AMARELA, "Voce saiu da corrida.");
+        return 1;
+    }
+	if(strcmp(cmd, "/locais", true) == 0)
+	{
+	    ShowPlayerDialog(playerid, DIALOG_LOCAIS, DIALOG_STYLE_LIST, "Menu de Teleportes", "Aeroporto de Los Santos\nGrove Street\nAeroporto de San Fierro\nAeroporto de Las Venturas\nMonte Chiliad", "Ir", "Cancelar");
+	    return 1;
+	}
+	if(strcmp(cmd, "/vida", true) == 0)
+	{
+	    SetPlayerHealth(playerid, 100.0);
+	    SendClientMessage(playerid, COR_VERDE, "Sua vida foi restaurada.");
+	    return 1;
+	}
+	if(strcmp(cmd, "/colete", true) == 0)
+	{
+	    SetPlayerArmour(playerid, 100.0);
+	    SendClientMessage(playerid, COR_VERDE, "Voce recebeu um colete.");
+	    return 1;
+	}
+	if(strcmp(cmd, "/tp", true) == 0)
+	{
+	    if(GetTickCount() - PlayerInfo[playerid][pLastTpTime] < 10000)
+	    {
+	        SendClientMessage(playerid, COR_VERMELHA, "ERRO: Aguarde 10 segundos para se teleportar novamente.");
+	        return 1;
+	    }
+		new Float:x, Float:y, Float:z;
+		if(sscanf(params, "fff", x, y, z))
+		{
+			return SendClientMessage(playerid, COR_CINZA, "USO: /tp [coordenada X] [coordenada Y] [coordenada Z]");
+		}
+		SetPlayerPos(playerid, x, y, z);
+		new message[128];
+		format(message, sizeof(message), "INFO: Voce foi teleportado para as coordenadas %.2f, %.2f, %.2f", x, y, z);
+		SendClientMessage(playerid, COR_AZUL, message);
+		PlayerInfo[playerid][pLastTpTime] = GetTickCount();
+		return 1;
+	}
+	if(strcmp(cmd, "/veh", true) == 0)
+	{
+		if(!strlen(params)) return SendClientMessage(playerid, COR_CINZA, "USO: /veh [id do veiculo]");
+		new carid = strval(params);
+		if(carid < 400 || carid > 611) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: ID de veiculo invalido (400-611).");
+        new idx = PlayerInfo[playerid][pVehicleIndex];
+        if(IsValidVehicle(PlayerInfo[playerid][pPlayerVehicles][idx]))
+        {
+            DestroyVehicle(PlayerInfo[playerid][pPlayerVehicles][idx]);
+        }
+		new Float:x, Float:y, Float:z, angle;
+		GetPlayerPos(playerid, x, y, z);
+		GetPlayerFacingAngle(playerid, angle);
+		new created_vehicle = CreateVehicle(carid, x, y+3.0, z, angle, -1, -1, 60000);
+		SetVehicleNumberPlate(created_vehicle, sendername);
+		PlayerInfo[playerid][pPlayerVehicles][idx] = created_vehicle;
+		PlayerInfo[playerid][pVehicleIndex]++;
+		if(PlayerInfo[playerid][pVehicleIndex] >= MAX_PLAYER_VEHICLES)
+		{
+		    PlayerInfo[playerid][pVehicleIndex] = 0;
+		}
+		new Float:vehX, Float:vehY, Float:vehZ;
+		GetVehiclePos(created_vehicle, vehX, vehY, vehZ);
+		GetVehicleZAngle(created_vehicle, angle);
+		SetPlayerPos(playerid, vehX + 2.5, vehY, vehZ);
+		SetPlayerFacingAngle(playerid, angle + 90.0);
+		SendClientMessage(playerid, COR_AZUL, "Seu veiculo chegou! Aproxime-se para entrar.");
+		return 1;
+	}
+	if(strcmp(cmd, "/armas", true) == 0)
+	{
+	    ShowPlayerDialog(playerid, DIALOG_ARMAS, DIALOG_STYLE_LIST, "Pacotes de Armas", "Pacote 1: Gangster\nPacote 2: Fuzileiro\nPacote 3: Aniquilador\nPacote 4: TUDO!", "Pegar", "Cancelar");
+	    return 1;
+	}
+	if(strcmp(cmd, "/mp", true) == 0)
+	{
+	    new targetid, message[128], str[256], targetname[MAX_PLAYER_NAME];
+	    if(sscanf(params, "us[128]", targetid, message)) return SendClientMessage(playerid, COR_CINZA, "USO: /mp [id do jogador] [mensagem]");
+	    if(!IsPlayerConnected(targetid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: ID de jogador invalido.");
+	    GetPlayerName(targetid, targetname, sizeof(targetname));
+	    format(str, sizeof(str), "[MP de %s]: %s", sendername, message);
+	    SendClientMessage(targetid, 0xFF66FFAA, str);
+	    format(str, sizeof(str), "[MP para %s]: %s", targetname, message);
+	    SendClientMessage(playerid, 0xFF66FFAA, str);
+	    return 1;
+	}
+	if(strcmp(cmd, "/jetpack", true) == 0)
+	{
+	    SetPlayerSpecialAction(playerid, SPECIAL_ACTION_USEJETPACK);
+	    SendClientMessage(playerid, COR_AZUL, "Mochila a jato equipada!");
+	    return 1;
+	}
+	if(strcmp(cmd, "/flip", true) == 0)
+	{
+	    if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Voce nao esta em um veiculo.");
+	    new vehicleid = GetPlayerVehicleID(playerid);
+	    new Float:x, Float:y, Float:z;
+	    GetVehiclePos(vehicleid, x, y, z);
+	    SetVehicleZAngle(vehicleid, 0.0);
+	    SetVehiclePos(vehicleid, x, y, z + 2.0);
+	    SendClientMessage(playerid, COR_AZUL, "Veiculo desvirado!");
+	    return 1;
+	}
+	if(strcmp(cmd, "/nos", true) == 0)
+	{
+	    if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Voce nao esta em um veiculo.");
+	    AddVehicleComponent(GetPlayerVehicleID(playerid), 1010);
+	    SendClientMessage(playerid, COR_AZUL, "Nitro infinito instalado!");
+	    return 1;
+	}
+    if(strcmp(cmd, "/reparar", true) == 0)
+	{
+		if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Voce nao esta em um veiculo.");
+		RepairVehicle(GetPlayerVehicleID(playerid));
+		SendClientMessage(playerid, COR_VERDE, "Veiculo reparado com sucesso!");
+		return 1;
+	}
+	if(strcmp(cmd, "/pular", true) == 0)
+	{
+	    if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Voce nao esta em um veiculo.");
+	    new vehicleid = GetPlayerVehicleID(playerid);
+	    new Float:x, Float:y, Float:z;
+	    GetVehicleVelocity(vehicleid, x, y, z);
+	    SetVehicleVelocity(vehicleid, x, y, z + 0.5);
+	    SendClientMessage(playerid, COR_AZUL, "Pulando!");
+	    return 1;
+	}
+	if(strcmp(cmd, "/cor", true) == 0)
+	{
+	    if(!IsPlayerInAnyVehicle(playerid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Voce nao esta em um veiculo.");
+	    new color1, color2;
+	    if(sscanf(params, "ii", color1, color2)) return SendClientMessage(playerid, COR_CINZA, "USO: /cor [ID cor 1] [ID cor 2]");
+	    ChangeVehicleColor(GetPlayerVehicleID(playerid), color1, color2);
+	    SendClientMessage(playerid, COR_AZUL, "Veiculo pintado!");
+	    return 1;
+	}
+	if(strcmp(sendername, DONO_DO_SERVIDOR, true) == 0)
+	{
+	    if(strcmp(cmd, "!tp", true) == 0)
+	    {
+	        new Float:x, Float:y, Float:z;
+	        new targetid;
+	        if(sscanf(params, "u", targetid))
+	        {
+	            if(!IsPlayerConnected(targetid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: ID de jogador invalido.");
+	            GetPlayerPos(targetid, x, y, z);
+	            SetPlayerPos(playerid, x, y + 2.0, z);
+	            SendClientMessage(playerid, COR_AZUL, "ADM: Teleportado para o jogador.");
+	        }
+	        else if(sscanf(params, "fff", x, y, z))
+	        {
+	            SetPlayerPos(playerid, x, y, z);
+	            new message[128];
+		        format(message, sizeof(message), "ADM: Voce foi teleportado para as coordenadas %.2f, %.2f, %.2f", x, y, z);
+		        SendClientMessage(playerid, COR_AZUL, message);
+	        }
+	        else
+	        {
+	             return SendClientMessage(playerid, COR_CINZA, "USO: !tp [id] OU !tp [x] [y] [z]");
+	        }
+	        return 1;
+	    }
+	    if(strcmp(cmd, "/iniciarcorrida", true) == 0)
+	    {
+	        if(gCorridaAtiva) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: Uma corrida ja esta em andamento.");
+	        gCorridaAtiva = true; gInscricoesAbertas = true;
+	        for(new i=0; i<MAX_PLAYERS; i++) { if(IsPlayerConnected(i)) gJogadoresNaCorrida[i] = false; }
+	        SendClientMessageToAll(COR_AMARELA, "==================================================");
+	        SendClientMessageToAll(COR_VERDE, "CORRIDA! As inscricoes estao abertas por 30 segundos!");
+	        SendClientMessageToAll(COR_VERDE, "Digite /entrarcorrida para participar!");
+	        SendClientMessageToAll(COR_AMARELA, "==================================================");
+	        SetTimer("IniciarAposContagem", 30000, false);
+	        return 1;
+	    }
+	    if(strcmp(cmd, "/allweapons", true) == 0)
+	    {
+	        new targetid = playerid; if(strlen(params)) { targetid = strval(params); }
+	        if(!IsPlayerConnected(targetid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: ID invalido.");
+	        for(new i = 1; i < 47; i++) { if(i != 44 && i != 45) { GivePlayerWeapon(targetid, i, 9999); } }
+	        SendClientMessage(playerid, COR_VERDE, "Todas as armas foram dadas.");
+	        return 1;
+	    }
+		if(strcmp(cmd, "/get", true) == 0)
+		{
+			new targetid; if(sscanf(params, "u", targetid)) return SendClientMessage(playerid, COR_CINZA, "USO: /get [id do jogador]");
+			if(!IsPlayerConnected(targetid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: ID de jogador invalido.");
+			new Float:x, Float:y, Float:z; GetPlayerPos(playerid, x, y, z);
+			SetPlayerPos(targetid, x, y+2.0, z);
+			SendClientMessage(playerid, COR_AZUL, "Jogador puxado com sucesso.");
+			return 1;
+		}
+		if(strcmp(cmd, "/god", true) == 0)
+		{
+		    if(PlayerInfo[playerid][pGodMode] == false)
+		    {
+		        PlayerInfo[playerid][pGodMode] = true; SetPlayerHealth(playerid, 999999.0);
+		        SendClientMessage(playerid, COR_VERDE, "Modo Deus ATIVADO. Voce esta invulneravel.");
+		    }
+		    else
+		    {
+		        PlayerInfo[playerid][pGodMode] = false; SetPlayerHealth(playerid, 100.0);
+		        SendClientMessage(playerid, COR_VERMELHA, "Modo Deus DESATIVADO.");
+		    }
+		    return 1;
+		}
+		if(strcmp(cmd, "/clima", true) == 0)
+	    {
+	        new weatherid; if(sscanf(params, "i", weatherid)) return SendClientMessage(playerid, COR_CINZA, "USO: /clima [ID do clima 0-20]");
+	        SetWeather(weatherid); new str[64];
+	        format(str, sizeof(str), "ADM: O clima foi alterado para %d.", weatherid);
+	        SendClientMessageToAll(COR_AMARELA, str);
+	        return 1;
+	    }
+		if(strcmp(cmd, "/goto", true) == 0)
+		{
+			new targetid; if(sscanf(params, "u", targetid)) return SendClientMessage(playerid, COR_CINZA, "USO: /goto [id do jogador]");
+			if(!IsPlayerConnected(targetid)) return SendClientMessage(playerid, COR_VERMELHA, "ERRO: ID de jogador invalido.");
+			new Float:x, Float:y, Float:z; GetPlayerPos(targetid, x, y, z);
+			SetPlayerPos(playerid, x, y+2.0, z);
+			return 1;
+		}
+		if(strcmp(cmd, "/kick", true) == 0)
+		{
+			new targetid, reason[128]; if(sscanf(params, "us", targetid, reason)) return SendClientMessage(playerid, COR_CINZA, "USO: /kick [id do jogador] [motivo]");
+			Kick(targetid);
+			return 1;
+		}
+		if(strcmp(cmd, "/ban", true) == 0)
+		{
+			new targetid; if(sscanf(params, "u", targetid)) return SendClientMessage(playerid, COR_CINZA, "USO: /ban [id do jogador]");
+			Ban(targetid);
+			return 1;
+		}
+		if(strcmp(cmd, "/anuncio", true) == 0)
+		{
+			if(!strlen(params)) return SendClientMessage(playerid, COR_CINZA, "USO: /anuncio [mensagem]");
+			new str[256];
+			format(str, sizeof(str), "[ANUNCIO ADM] %s", params);
+			SendClientMessageToAll(COR_AMARELA, str);
+			return 1;
+		}
+	}
+	return 1;
+}
+
+public PutPlayerInVehicle_Fix(playerid, vehicleid)
+{
+    if(IsPlayerConnected(playerid) && IsValidVehicle(vehicleid))
+    {
+        PutPlayerInVehicle(playerid, vehicleid, 0); // 0 = no banco do motorista
+    }
+    return 1;
+}
